@@ -1,0 +1,381 @@
+--1) hrEx라는 계정을 추가  >> 관리자에서 실행
+--
+----12C 이상의 오라클에서 기존 방식으로 계정을 추가하거나 삭제할 수 있도록 설정     
+--ALTER SESSION SET "_ORACLE_SCRIPT" = true;
+--      
+--- 데이터베이스 접속 및 테이블스페이스 사용에 대한 권한을 부여한다.
+--- 패스워드는 hrEx$ 로 부여한다.
+--GRANT CONNECT, RESOURCE, UNLIMITED TABLESPACE TO  hrEx  IDENTIFIED BY  "hrEx$";
+--	 
+--     
+--- tablespace는 USERS, temporary는 TEMP로 변경한다.
+--ALTER USER  hrEx  DEFAULT TABLESPACE USERS;
+--ALTER USER  hrEx  TEMPORARY TABLESPACE TEMP;
+--	    
+--		
+--  - 추가된 계정을 확인 한다.	   
+--SELECT * FROM all_users;      
+
+--============================ 쿼리문 정리 ====================================--
+
+-- 테이블 목록 확인
+    SELECT *  FROM TAB;
+
+ -- 테이블의 컬럼 정보 확인(테이블명은 대문자로)
+    SELECT * FROM user_tab_columns WHERE table_name = UPPER('테이블명');
+    SELECT * FROM cols WHERE table_name = UPPER('테이블명');
+    SELECT * FROM col WHERE tname = UPPER('테이블명');
+    DESC 테이블명; 
+    
+-- 테이블 내용 조회  
+    SELECT * FROM REGIONS;
+    SELECT * FROM COUNTRIES;
+    SELECT * FROM LOCATIONS;
+    SELECT * FROM DEPARTMENTS;
+    SELECT * FROM EMPLOYEES;
+    SELECT * FROM JOBS;
+    SELECT * FROM JOB_HISTORY;
+
+-- 강제 삭제 : 참조키도 같이 삭제
+    DROP TABLE REGIONS CASCADE CONSTRAINTS PURGE;
+    DROP TABLE COUNTRIES CASCADE CONSTRAINTS PURGE;
+    DROP TABLE LOCATIONS CASCADE CONSTRAINTS PURGE;
+    DROP TABLE DEPARTMENTS CASCADE CONSTRAINTS PURGE;
+    DROP TABLE EMPLOYEES CASCADE CONSTRAINTS PURGE;
+    DROP TABLE JOBS CASCADE CONSTRAINTS PURGE;
+    DROP TABLE JOB_HISTORY CASCADE CONSTRAINTS PURGE;	
+
+
+-- 제약조건 확인 (P : 기본키, C: NOT NULL 등, U: UNIQUE, R: 참조키 등)
+   SELECT * FROM user_constraints WHERE table_name='REGIONS';
+   SELECT * FROM user_constraints WHERE table_name='COUNTRIES';
+   SELECT * FROM user_constraints WHERE table_name='LOCATIONS';
+   SELECT * FROM user_constraints WHERE table_name='DEPARTMENTS';
+   SELECT * FROM user_constraints WHERE table_name='EMPLOYEES';
+   SELECT * FROM user_constraints WHERE table_name='JOBS';
+   SELECT * FROM user_constraints WHERE table_name='JOB_HISTORY';
+   
+   -- 컬럼에 부여된 제약조건 정보 확인
+   SELECT * FROM user_cons_columns WHERE table_name = 'REGIONS';
+   SELECT * FROM user_cons_columns WHERE table_name = 'COUNTRIES';
+   SELECT * FROM user_cons_columns WHERE table_name = 'LOCATIONS';
+   SELECT * FROM user_cons_columns WHERE table_name = 'DEPARTMENTS';
+   SELECT * FROM user_cons_columns WHERE table_name = 'EMPLOYEES';
+   SELECT * FROM user_cons_columns WHERE table_name = 'JOBS';
+   SELECT * FROM user_cons_columns WHERE table_name = 'JOB_HISTORY';
+   
+   -- 제약조건 및 컬럼 확인
+   SELECT u1.table_name, column_name, constraint_type, u1.constraint_name, search_condition
+   FROM user_constraints u1
+   JOIN user_cons_columns u2 ON u1.constraint_name = u2.constraint_name
+   WHERE u1.table_name = UPPER('테이블명');
+   
+   
+
+-- 『테이블명』을 참조하는 모든 테이블 목록 출력(자식 테이블 목록 출력)
+   SELECT fk.owner, fk.constraint_name , fk.table_name 
+   FROM all_constraints fk, all_constraints pk 
+   WHERE fk.r_constraint_name = pk.constraint_name 
+          AND fk.constraint_type = 'R' 
+          AND pk.table_name = UPPER('테이블명')
+   ORDER BY fk.table_name;   
+   
+-- 『테이블명』이 참조하고 있는 모든 테이블 목록 출력(부모 테이블 목록 출력)
+    SELECT table_name FROM user_constraints
+    WHERE constraint_name IN (
+          SELECT r_constraint_name 
+          FROM user_constraints
+          WHERE table_name = UPPER('테이블명') AND constraint_type = 'R'
+    );
+
+-- 『테이블명』의 부모 테이블 목록 및 부모 컬럼 목록 출력
+    --  부모 2개 이상으로 기본키를 만든 경우 여러번 출력 됨
+    SELECT fk.constraint_name, fk.table_name child_table, fc.column_name child_column,
+              pk.table_name parent_table, pc.column_name parent_column
+    FROM all_constraints fk, all_constraints pk, all_cons_columns fc, all_cons_columns pc
+    WHERE fk.r_constraint_name = pk.constraint_name
+             AND fk.constraint_name = fc.constraint_name
+             AND pk.constraint_name = pc.constraint_name
+             AND fk.constraint_type = 'R'
+             AND pk.constraint_type = 'P'
+             AND fk.table_name = UPPER('EMPLOYEES');   
+
+
+--존재하는 테이블에 FOREIGN KEY 제약 조건 설정
+    ALTER TABLE 테이블명
+        ADD [ CONSTRAINT 제약조건명 ] FOREIGN KEY( 컬럼 [,컬럼] )
+        REFERENCES  참조할테이블명(컬럼 [,컬럼]);   
+        
+        
+--============================================================================-- 
+-- 1. 각 테이블을 생성한다
+-- 2. 참조하는 값을 제외한 데이터를 삽입한다
+-- 3. 참조키에 맞는 데이터를 비교하여 데이터를 수정한다.
+-- 4. 참조키를 추가한다.
+   
+--------------------------------- 리전(REGIONS) --------------------------------- 
+ 
+ --(1) 테이블 생성
+        CREATE TABLE REGIONS(
+        REGION_ID NUMBER ,
+        REGION_NAME VARCHAR2(30),
+        PRIMARY KEY(REGION_ID) ,
+        CONSTRAINT REGION_ID_NN CHECK ("REGION_ID" IS NOT NULL)
+        );
+ 
+ --(2-1) 데이터 입력
+    INSERT INTO REGIONS(REGION_ID,REGION_NAME) VALUES('1','Europe');
+    INSERT INTO REGIONS(REGION_ID,REGION_NAME) VALUES('2','Americas');
+    INSERT INTO REGIONS(REGION_ID,REGION_NAME) VALUES('3','Asia');
+ 
+
+ 
+ ------ 제약조건확인 ------
+   SELECT * FROM user_constraints WHERE table_name='REGIONS';
+ 
+ ------ 테이블 내용 조회 ------  
+    SELECT * FROM REGIONS;
+
+   
+  
+------------------------------- 컨트리(COUNTRIES)-------------------------------- 
+ --(1) 테이블 생성
+     CREATE TABLE COUNTRIES (
+        COUNTRY_ID CHAR(2), 
+        COUNTRY_NAME VARCHAR2(40), 
+        REGION_ID NUMBER,
+        CONSTRAINT COUNTR_C_ID_PK PRIMARY KEY (COUNTRY_ID)
+     );   
+ 
+ --(2-1) 데이터 입력
+    INSERT INTO COUNTRIES (COUNTRY_ID, COUNTRY_NAME) VALUES ('US', 'United States of America');
+    INSERT INTO COUNTRIES (COUNTRY_ID, COUNTRY_NAME) VALUES ('JP', 'Japan');
+    INSERT INTO COUNTRIES (COUNTRY_ID, COUNTRY_NAME) VALUES ('FR', 'France');
+ 
+ --(2-2) 데이터 수정 
+    UPDATE COUNTRIES SET REGION_ID = 1 WHERE COUNTRY_ID ='US';
+    UPDATE COUNTRIES SET REGION_ID = 2 WHERE COUNTRY_ID ='JP';
+    UPDATE COUNTRIES SET REGION_ID = 3 WHERE COUNTRY_ID ='FR';
+ 
+ 
+ --(3) 참조키 추가
+    ALTER TABLE COUNTRIES ADD CONSTRAINT COUNTR_REG_FK FOREIGN KEY(REGION_ID) 
+    REFERENCES REGIONS (REGION_ID);
+
+
+ ------ 제약조건확인 ------
+   SELECT * FROM user_constraints WHERE table_name='COUNTRIES';
+  
+ ------ 테이블 내용 조회 ------  
+    SELECT * FROM COUNTRIES;
+    
+   
+   
+   
+------------------------------- 로케이션(LOCATIONS) ------------------------------ 
+ --(1) 테이블 생성
+    CREATE TABLE LOCATIONS(
+        LOCATION_ID NUMBER(4),
+        STREET_ADDRESS VARCHAR2(40),
+        POSTAL_CODE VARCHAR2(12),
+        CITY VARCHAR2(30) NOT NULL,
+        STATE_PROVINCE VARCHAR2(25),
+        COUNTRY_ID CHAR(2),--참조키
+        PRIMARY KEY (LOCATION_ID)
+    );
+ 
+ --(2-1) 데이터 입력
+    INSERT INTO LOCATIONS (LOCATION_ID, STREET_ADDRESS, POSTAL_CODE, CITY, STATE_PROVINCE) 
+    VALUES ('1000','1297 Via Cola di Rie','00989','Roma','');
+    
+    INSERT INTO LOCATIONS (LOCATION_ID, STREET_ADDRESS, POSTAL_CODE, CITY, STATE_PROVINCE) 
+    VALUES ('1100','93091 Calle della Testa','10934','Venice','');
+    
+    INSERT INTO LOCATIONS (LOCATION_ID, STREET_ADDRESS, POSTAL_CODE, CITY, STATE_PROVINCE) 
+    VALUES ('1200','2017 Shinjuku-ku','1689','Tokyo','Tokyo Prefecture'); 
+ 
+ --(2-2) 데이터 수정 
+    UPDATE LOCATIONS SET COUNTRY_ID = 'US' WHERE LOCATION_ID =1000;
+    UPDATE LOCATIONS SET COUNTRY_ID = 'JP' WHERE LOCATION_ID =1100;
+    UPDATE LOCATIONS SET COUNTRY_ID = 'FR' WHERE LOCATION_ID =1200;
+    
+ --(3) 참조키 추가
+     ALTER TABLE LOCATIONS ADD CONSTRAINT fk_coun_loca FOREIGN KEY(COUNTRY_ID) 
+     REFERENCES COUNTRIES(COUNTRY_ID);
+    
+    
+ ------ 제약조건확인 ------
+   SELECT * FROM user_constraints WHERE table_name='LOCATIONS';
+   
+ ------ 테이블 내용 조회 ------
+    SELECT * FROM LOCATIONS;
+   
+   
+   
+   
+----------------------------- 디파트먼트(DEPARTMENTS)-----------------------------  
+ --(1) 테이블 생성
+    CREATE TABLE DEPARTMENTS (
+       DEPARTMENT_ID NUMBER(4) PRIMARY KEY,
+       DEPARTMENT_NAME VARCHAR2(30) NOT NULL,
+       MANGER_ID NUMBER(6),
+       LOCATION_ID NUMBER(4)
+    );
+ 
+ --(2-1) 데이터 입력
+    INSERT INTO DEPARTMENTS (DEPARTMENT_ID,  DEPARTMENT_NAME) VALUES (10, 'Administration');
+    INSERT INTO DEPARTMENTS (DEPARTMENT_ID,  DEPARTMENT_NAME) VALUES (20, 'Marketing');
+    INSERT INTO DEPARTMENTS (DEPARTMENT_ID,  DEPARTMENT_NAME) VALUES (30, 'Purchasing'); 
+ 
+ --(2-2) 데이터 수정 
+    UPDATE DEPARTMENTS SET LOCATION_ID = 1000 WHERE DEPARTMENT_ID = 10;
+    UPDATE DEPARTMENTS SET LOCATION_ID = 1100 WHERE DEPARTMENT_ID = 20;
+    UPDATE DEPARTMENTS SET LOCATION_ID = 1200 WHERE DEPARTMENT_ID = 30;
+    
+    UPDATE DEPARTMENTS SET MANGER_ID = 100 WHERE DEPARTMENT_ID = 10;
+    UPDATE DEPARTMENTS SET MANGER_ID = 101 WHERE DEPARTMENT_ID = 20;
+    UPDATE DEPARTMENTS SET MANGER_ID = 102 WHERE DEPARTMENT_ID = 30;
+ 
+ --(3) 참조키 추가
+        ALTER TABLE DEPARTMENTS ADD CONSTRAINT fk_man_dept FOREIGN KEY(MANGER_ID) REFERENCES EMPLOYEES(EMPLOYEE_ID);       
+        ALTER TABLE DEPARTMENTS ADD CONSTRAINT fk_loc_dept FOREIGN KEY(LOCATION_ID) REFERENCES LOCATIONS (LOCATION_ID);
+ 
+ 
+ ------ 제약조건확인 ------
+   SELECT * FROM user_constraints WHERE table_name='DEPARTMENTS';
+
+ ------ 테이블 내용 조회 ------
+    SELECT * FROM DEPARTMENTS;
+    
+    
+    
+-----------------------------  임플로이(EMPLOYEES) ----------------------------- 
+ --(1) 테이블 생성
+        CREATE TABLE EMPLOYEES(
+            EMPLOYEE_ID NUMBER(6),        
+            FIRST_NAME VARCHAR2(20),
+            LAST_NAME VARCHAR2(25) NOT NULL,
+            EMAIL VARCHAR2(25) NOT NULL,
+            PHONE_NUMBER VARCHAR2(20),
+            HIRE_DATE DATE NOT NULL,
+            JOB_ID VARCHAR2(10) NOT NULL,
+            SALARY NUMBER(8,2),
+            COMMISSION_PCT NUMBER(2,2),
+            MANAGER_ID NUMBER(6),
+            DEPARTMENT_ID NUMBER(4),
+            PRIMARY KEY(EMPLOYEE_ID),
+            CONSTRAINT EMP_SALARY_MIN CHECK(SALARY > 0)
+        );    
+ 
+  --(2-1) 데이터 입력  -- JOB_ID NN이라 임시 값 넣어준다. 
+    INSERT INTO EMPLOYEES( EMPLOYEE_ID, FIRST_NAME, LAST_NAME,EMAIL, PHONE_NUMBER, HIRE_DATE,JOB_ID,SALARY) 
+    VALUES(100,'Steven','King','SKING','515.123.4567','87/06/17','AD_PRES',24000);  
+           
+    INSERT INTO EMPLOYEES( EMPLOYEE_ID, FIRST_NAME, LAST_NAME,EMAIL, PHONE_NUMBER, HIRE_DATE,JOB_ID,SALARY) 
+    VALUES(101,'Neena','kochhar','NKOCHHAR','515.123.4568','89/09/21','AD_VP',17000);
+            
+    INSERT INTO EMPLOYEES( EMPLOYEE_ID, FIRST_NAME, LAST_NAME, EMAIL, PHONE_NUMBER, HIRE_DATE,JOB_ID,SALARY)  
+    VALUES(102,'Lex','De Hann','LDEHAAN','515.123.4569','93/01/13','AD_VP',17000);
+ 
+ 
+  --(2-2) 데이터 수정
+    -- NN이라 임시로 넣어줬던 JOB_ID 참조값에 맞게 변경
+    UPDATE EMPLOYEES SET JOB_ID='SA_MAN' WHERE EMPLOYEE_ID= 100;
+    UPDATE EMPLOYEES SET JOB_ID='IT_PROG' WHERE EMPLOYEE_ID= 101;
+    UPDATE EMPLOYEES SET JOB_ID='AC_MGR' WHERE EMPLOYEE_ID= 102;
+    
+    UPDATE EMPLOYEES SET DEPARTMENT_ID=10 WHERE EMPLOYEE_ID= 100;
+    UPDATE EMPLOYEES SET DEPARTMENT_ID=20 WHERE EMPLOYEE_ID= 101;
+    UPDATE EMPLOYEES SET DEPARTMENT_ID=30 WHERE EMPLOYEE_ID= 102;
+    
+    UPDATE EMPLOYEES SET MANAGER_ID=102 WHERE EMPLOYEE_ID= 100;
+    UPDATE EMPLOYEES SET MANAGER_ID=100 WHERE EMPLOYEE_ID= 101;
+    UPDATE EMPLOYEES SET MANAGER_ID=101 WHERE EMPLOYEE_ID= 102;
+  
+  
+ 
+ --(3) 참조키 추가
+    ALTER TABLE EMPLOYEES ADD CONSTRAINT fk_job_emp FOREIGN KEY(JOB_ID) REFERENCES JOBS(JOB_ID);
+    ALTER TABLE EMPLOYEES ADD CONSTRAINT fk_MANA_emp FOREIGN KEY(MANAGER_ID) REFERENCES EMPLOYEES(EMPLOYEE_ID);
+    ALTER TABLE EMPLOYEES ADD CONSTRAINT fk_dept_emp FOREIGN KEY(DEPARTMENT_ID) REFERENCES DEPARTMENTS(DEPARTMENT_ID);
+
+
+ ------ 제약조건확인 ------
+   SELECT * FROM user_constraints WHERE table_name='EMPLOYEES';
+
+ ------ 테이블 내용 조회 ------
+    SELECT * FROM EMPLOYEES; 
+    
+    
+    
+    
+
+---------------------------------- 잡스(JOBS) ----------------------------------     
+ --(1) 테이블 생성
+        CREATE TABLE JOBS(
+        JOB_ID VARCHAR2(10) PRIMARY KEY,
+        JOB_TITLE VARCHAR2(35) NOT NULL,
+        MIN_SALARY NUMBER(6),
+        MAX_SALARY NUMBER(6)
+        );
+ 
+ --(2-1) 데이터 입력
+        INSERT INTO JOBS(JOB_ID,JOB_TITLE,MIN_SALARY,MAX_SALARY) VALUES('IT_PROG','Programmer',4000,10000);
+        INSERT INTO JOBS(JOB_ID,JOB_TITLE,MIN_SALARY,MAX_SALARY) VALUES('AC_MGR','Accounting Manager',8200,16000);
+        INSERT INTO JOBS(JOB_ID,JOB_TITLE,MIN_SALARY,MAX_SALARY) VALUES('SA_MAN','Sales Manager',10000,20000);
+     
+ 
+ 
+ ------ 제약조건확인 ------
+   SELECT * FROM user_constraints WHERE table_name='JOBS';
+
+ ------ 테이블 내용 조회 ------
+    SELECT * FROM JOBS;
+
+
+
+------------------------------ 잡히스토리(JOB_HISTORY)----------------------------
+ --(1) 테이블 생성
+        CREATE TABLE JOB_HISTORY (
+        EMPLOYEE_ID NUMBER(6),
+        START_DATE DATE,
+        END_DATE DATE NOT NULL,
+        JOB_ID VARCHAR2(10) NOT NULL,
+        DEPARTMENT_ID NUMBER(4),
+        CONSTRAINT JHIST_EMP_ID_ST_DATE_PK PRIMARY KEY (EMPLOYEE_ID, START_DATE),
+        CONSTRAINT JHIST_DATE_INTERVAL CHECK (END_DATE > START_DATE)
+        );   
+ 
+ --(2-1) 데이터 입력
+    INSERT INTO JOB_HISTORY (EMPLOYEE_ID, START_DATE, END_DATE, JOB_ID) 
+    VALUES (100, TO_DATE('20190101','YYYYMMDD'), TO_DATE('20200101','YYYYMMDD'), 'NNFK');
+    
+    INSERT INTO JOB_HISTORY (EMPLOYEE_ID, START_DATE, END_DATE, JOB_ID) 
+    VALUES (101, TO_DATE('20200101','YYYYMMDD'), TO_DATE('20210101','YYYYMMDD'), 'NNFK');
+    
+    INSERT INTO JOB_HISTORY (EMPLOYEE_ID, START_DATE, END_DATE, JOB_ID) 
+    VALUES (102, TO_DATE('20210101','YYYYMMDD'), TO_DATE('20220101','YYYYMMDD'), 'NNFK');
+ 
+ 
+ --(2-2) 데이터 수정 
+    UPDATE JOB_HISTORY SET JOB_ID = 'SA_MAN' WHERE EMPLOYEE_ID=100;
+    UPDATE JOB_HISTORY SET JOB_ID = 'IT_PROG' WHERE EMPLOYEE_ID=101;
+    UPDATE JOB_HISTORY SET JOB_ID = 'AC_MGR' WHERE EMPLOYEE_ID=102;
+    
+    UPDATE JOB_HISTORY SET DEPARTMENT_ID = 10 WHERE EMPLOYEE_ID=100;
+    UPDATE JOB_HISTORY SET DEPARTMENT_ID = 20 WHERE EMPLOYEE_ID=101;
+    UPDATE JOB_HISTORY SET DEPARTMENT_ID = 30 WHERE EMPLOYEE_ID=102;
+ 
+ --(3) 참조키 추가
+    ALTER TABLE JOB_HISTORY ADD CONSTRAINT fk_job_jobh FOREIGN KEY (JOB_ID) REFERENCES JOBS(JOB_ID);
+    ALTER TABLE JOB_HISTORY ADD CONSTRAINT fk_DEPT_jobh FOREIGN KEY (DEPARTMENT_ID) REFERENCES DEPARTMENTS(DEPARTMENT_ID);
+    ALTER TABLE JOB_HISTORY ADD CONSTRAINT JHIST_EMP_FK FOREIGN KEY (EMPLOYEE_ID) REFERENCES EMPLOYEES(EMPLOYEE_ID);
+
+ 
+ 
+ ------ 제약조건확인 ------
+   SELECT * FROM user_constraints WHERE table_name='JOB_HISTORY';
+ 
+ ------ 테이블 내용 조회 ------
+    SELECT * FROM JOB_HISTORY; 
+ 

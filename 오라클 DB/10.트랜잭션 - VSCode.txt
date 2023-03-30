@@ -1,0 +1,38 @@
+
+-- 날짜 형식 설정
+ALTER SESSION SET NLS_LANGUAGE = 'KOREAN';
+ALTER SESSION SET NLS_CURRENCY = '￦';
+ALTER SESSION SET NLS_DATE_LANGUAGE = 'KOREAN';
+ALTER SESSION SET NLS_DATE_FORMAT='RR/MM/DD';
+
+
+SELECT * FROM GUEST;
+
+INSERT INTO guest(num, name, content, REG_DATE) VALUES (
+    GUEST_SEQ.NEXTVAL, 'd','dd',TO_DATE('2023-02-10','YYYY-MM-DD'));
+
+COMMIT;
+
+
+-------------------------------------------------------
+-- VS Code
+SET TRANSACTION READ ONLY;
+                -- SELECT 만 가능(INSERT, UPDATE, DELETE 불가능)
+SELECT * FROM guest;
+
+DELETE * FROM guest;  -- 에러
+ROLLBACK;
+         
+SET TRANSACTION READ WRITE;
+         
+DELETE FROM guest;
+SELECT * FROM guest;
+         
+ROLLBACK;
+SELECT * FROM guest;
+
+
+--------------
+-- SQL 디벨로프에서 락 이후
+DELETE FROM guest;
+ROLLBACK;
